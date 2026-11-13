@@ -2,8 +2,6 @@ from mesa import Agent, Model
 from mesa.experimental.continuous_space import(ContinuousSpace, ContinuousSpaceAgent)
 from dataclass import dataclass
 
-
-
 # Change this value -- we may want to go to SI units m/s 
 SPEED_LIMIT = 60
 
@@ -48,6 +46,19 @@ DANGEROUS = Behavior(
     pass_aggro_score = 90
 )
 
+
+class TrafficModel(Model):
+    def __init__(self, width, height, Agents):
+        super().__init__()
+
+        # Note I can seed the RNG in continuous space to make the models more reproducible. 
+        self.space = ContinuousSpace(dimension = [width, height],torus = True, n_agents = len(Agents))
+
+    # Continuous spaces give us a lot of functions for free -- calculate distances, add, remove agents, difference vector, get agents in radius, etc. Look at documention:
+    # https://mesa.readthedocs.io/stable/_modules/experimental/continuous_space/continuous_space.html
+
+
+
 class Driver(Agent):
     def __init__(self,model,init_speed, init_lane_num, travel_direction, init_x, init_y, length):
         self.model = model
@@ -60,6 +71,7 @@ class Driver(Agent):
 
     def set_speed(self, new_speed):
         self.speed = new_speed
+
 
 
     
