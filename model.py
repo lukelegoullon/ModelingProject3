@@ -1,39 +1,30 @@
-import numpy as np
-import solara
-from matplotlib.figure import Figure   # NOT pyplot: pyplot leaks figures in a server
-from mesa.visualization import SolaraViz, make_plot_component
-from mesa.visualization.utils import update_counter
-
+from mesa import Agent, Model
+from mesa.experimental.continuous_space import(ContinuousSpace, ContinuousSpaceAgent)
+import random
 import driver
 
+class TrafficModel(Model):
 
-# ---------------------------------------------------------------- road view
-@solara.component
-def RoadView(model):
-    update_counter.get()  # required, otherwise the component won't redraw each step
-    solara.FigureMatplotlib(fig)
+    def __init__(self, width, height, num_lanes, num_drivers, t_step, Agents):
+        super().__init__()
 
-# ---------------------------------------------------------------- live space-time diagram
-@solara.component
-def SpaceTime(model, last=300):
-    update_counter.get()
-    solara.FigureMatplotlib(fig)
+        # Note I can seed the RNG in continuous space to make the models more reproducible. 
+        self.space = ContinuousSpace(dimension = [width, height],torus = True, n_agents = len(Agents))
+        self.n_lanes = num_lanes
+        self.type = "Torus"
+        self.n_drivers = num_drivers
+        self.time_step = t_step
 
-# ---------------------------------------------------------------- charts from the DataCollector
-SpeedPlot = make_plot_component("mean_speed")
+    
 
-page = SolaraViz(
-    model,
-    components=[RoadView, SpaceTime, SpeedPlot],
-    model_params=model_params,
-    name="Ring-road with no ramps",
-    play_interval=100,   # ms between steps; lower = faster
-)
-page  # Solara looks for a top-level `page`
-if __name__ == "__main__":
-    import subprocess
-    import sys
+        
 
-    # Launch the Solara server on this file; it opens your default browser automatically.
-    # Because solara imports the file as a module, this block doesn't run again (no recursion).
-    subprocess.run([sys.executable, "-m", "solara", "run", __file__])
+    def get_drivers(self):
+        drivers = []
+        for i in range(self.n_drivers):
+            driver_behavior = random.choice([driver.DANGEROUS, driver.AVERAGE, driver.CAUTIOUS])
+
+            new_driver = driver.Driver(TrafficModel, 40, 1, 1, )
+
+    # Continuous spaces give us a lot of functions for free -- calculate distances, add, remove agents, difference vector, get agents in radius, etc. Look at documention:
+    # https://mesa.readthedocs.io/stable/_modules/experimental/continuous_space/continuous_space.html
