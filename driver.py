@@ -112,7 +112,12 @@ class Driver(ContinuousSpaceAgent):
 
     # check collision with two cars moving in the same direction 
     def check_collision(self, other):
-        
+        width = self.model.space.width
+        driver_x = [self.front_right, self.front_left, self.back_right, self.back_left]
+        other_x = [other.front_right, other.front_left, other.back_right, other.back_left]
+
+        if self.pos[0] < other.pos[0]:
+            x_comp = driver_corners[0]
         return True
         
 
