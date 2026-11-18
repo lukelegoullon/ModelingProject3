@@ -24,7 +24,10 @@ SPEED_LIMIT = mph_to_ms(60)
 class Behavior:
     name: str
     desired_speed: float
-    reaction_time: float
+    reaction_time_max: float
+    reaction_time_min: float
+    ttc_crit: float
+    ttc_sensitivity: float
     tailgating_dist_coeff: float
     pass_aggro_score: float
 
@@ -35,25 +38,34 @@ class Behavior:
 AVERAGE = Behavior(
     "AVERAGE",
     SPEED_LIMIT + 5,
-    reaction_time = 1.2,
-    tailgating_dist_coeff = 0.8*3,
-    pass_aggro_score = 50
+    reaction_time_max=1.2,
+    reaction_time_min=0.5,
+    ttc_crit=4.0,
+    ttc_sensitivity=1.0,
+    tailgating_dist_coeff=0.8*3,
+    pass_aggro_score=50
 )
 
-CAUTIOUS  = Behavior(
+CAUTIOUS = Behavior(
     "CAUTIOUS",
     SPEED_LIMIT,
-    reaction_time = 0.9,
-    tailgating_dist_coeff = 1.5*3,
-    pass_aggro_score = 20
-    )
+    reaction_time_max=1.0,
+    reaction_time_min=0.4,
+    ttc_crit=6.0,
+    ttc_sensitivity=1.2,
+    tailgating_dist_coeff=1.5*3,
+    pass_aggro_score=20
+)
 
 DANGEROUS = Behavior(
     "DANGEROUS",
     SPEED_LIMIT + 15,
-    reaction_time = 1.5,
-    tailgating_dist_coeff = 0.4*3,
-    pass_aggro_score = 90
+    reaction_time_max=1.5,
+    reaction_time_min=0.7,
+    ttc_crit=2.0,
+    ttc_sensitivity=0.8,
+    tailgating_dist_coeff=0.4*3,
+    pass_aggro_score=90
 )
 
 
@@ -125,11 +137,33 @@ class Driver(ContinuousSpaceAgent):
             if(self.check_collision(driver)):
                 colliding_vehicles.append(driver)
         return colliding_vehicles
-            
-            
 
+    # Added definitions for controlling reaction time - TTC calculation
+    def compute_ttc(self, lead_vehicle):
+        gap = (
+        lead_vehicle.pos[0]
+        - self.pos[0]
+        - 0.5*self.length
+        - 0.5*lead_vehicle.length
+    )
+        closing_speed = self.velo - lead_vehicle.velo
 
+        if closing_speed <= 0:
+            return np.inf
 
-    
+        return gap / closing_speed
 
-    
+    # Assign reaction time to driver based on TTC
+    def get_reaction_time(self, ttc):
+
+        b = self.behavior
+
+        if np.isinf(ttc):
+            return b.reaction_time_max
+
+        return (
+            b.reaction_time_min
+            + (b.reaction_time_max - b.reaction_time_min)
+            / (1 + np.exp(-b.ttc_sensitivity *
+                        (ttc - b.ttc_critical)))
+        )

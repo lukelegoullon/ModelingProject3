@@ -15,16 +15,15 @@ def agent_portrayal(agent):
 
 model_params = {
     "seed": {"type": "InputText", "value": 42, "label": "Seed"},
-    "width": 100,
-    "height": 100,
+    "length": {"type": "SliderInt", "value": 1000, "min": 10, "max": 1000, "step": 10, "label": "Num Lanes"},
     "num_lanes": {"type": "SliderInt", "value": 1, "min": 1, "max": 5, "step": 1, "label": "Num Lanes"},
     "nun_drivers": {"type": "SlinderInt", "value": 1, "min": 1, "max":100, "step":1, "label": "Num Drivers"},
-    "t_step": {"type": "SliderInt", "value": 1, "min": 1, "max": 5, "step": 1, "label": "Time Step"}#,
+    "t_step": {"type": "SliderInt", "value": 0.1, "min": 1, "max": 5, "step": 1, "label": "Time Step"}#,
     #Unsure what Agents Param will be/do in TrafficModel
     #"Agents": {"type": "SliderInt", "value": 50, "min": 10, "max": 200, "step": 10, "label": "Agents"},
 }
 
-model = TrafficModel(width=100, height=100, num_lanes=1, num_drivers=1, t_step=1, Agents)
+model = model.TrafficModel(length=1000, num_lanes=1, num_drivers=1, t_step=0.1, seed=None)
 
 # ---------------------------------------------------------------- charts from the DataCollector
 SpaceView = make_space_component(agent_portrayal)
