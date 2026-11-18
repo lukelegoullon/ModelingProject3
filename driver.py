@@ -42,7 +42,7 @@ AVERAGE = Behavior(
     reaction_time_min=0.5,
     ttc_crit=4.0,
     ttc_sensitivity=1.0,
-    tailgating_dist_coeff=0.8*3,
+    tailgating_dist_coeff=3,
     pass_aggro_score=50
 )
 
@@ -151,19 +151,22 @@ class Driver(ContinuousSpaceAgent):
         if closing_speed <= 0:
             return np.inf
 
-        return gap / closing_speed
+        return gap, closing_speed
 
+    
     # Assign reaction time to driver based on TTC
-    def get_reaction_time(self, ttc):
+    def get_reaction_time(self, ttc, gap):
 
         b = self.behavior
 
         if np.isinf(ttc):
             return b.reaction_time_max
 
+        if gap < (SPEED_LIMIT*b.tailgating_dist_coeff)/4:
+            return b.reaction_time_min
+
         return (
             b.reaction_time_min
             + (b.reaction_time_max - b.reaction_time_min)
-            / (1 + np.exp(-b.ttc_sensitivity *
-                        (ttc - b.ttc_critical)))
+            / (1 + np.exp(-b.ttc_sensitivity * (ttc - b.ttc_critical)))
         )
