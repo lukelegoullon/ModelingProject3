@@ -2,6 +2,7 @@ from mesa import Agent, Model
 from mesa.experimental.continuous_space import(ContinuousSpace, ContinuousSpaceAgent)
 import random
 import driver
+from mesa.datacollection import DataCollector
 
 class TrafficModel(Model):
 
@@ -15,7 +16,26 @@ class TrafficModel(Model):
         self.n_drivers = num_drivers
         self.time_step = t_step
 
-    
+        self.speed_hist: list[np.ndarray] = []  # per step, speed per (lane, cell) for space-time plots
+
+        self.datacollector = DataCollector(
+            model_reporters={
+                "n_vehicles": lambda m: len(m.agents),
+                "mean_speed": lambda m: np.mean([a.v for a in m.agents]) if len(m.agents) else 0.0,
+                "throughput": lambda m: m.throughput,
+                **{
+                    f"queue_{e['name']}": (lambda m, name=e["name"]: m.queue_of(name))
+                    for e in self.entries
+                },
+            }
+        )
+        # At end of simulation, need a time-snapshot to record speed and position for each car
+        #for agent in agents:
+            #snap = agent(pos,vel)
+            #self.speed_hist.append(snap)
+        #at end collect the information in the datacollector component inside the model
+        #self.datacollector.collect(self)
+        
 
         
 
