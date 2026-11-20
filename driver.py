@@ -29,6 +29,19 @@ SPEED_LIMIT = mph_to_ms(60)
 # Update this, shuld change based on speed
 # SAFE_TAILGATE = 3 * SPEED_LIMIT
 
+## Braking class
+class Braking: 
+    def __init__(self, init_time):
+        self.is_braking = False
+
+        self.curr_braking = 0
+        # Once a decision to brake is made, we start tracking braking times and corresponding brake amounts.
+        self.react_times = []
+        self.brake_amts = []
+        self.act_times = []
+
+        # The time where the braking was initialized
+        self.init_time = init_time
 
 # Data class is a simplified class meant to hold data -- automatically generates an init()
 # Current parameters to define driving 
@@ -43,9 +56,6 @@ class Behavior:
     ttc_sensitivity: float
     tailgating_dist_coeff: float
     pass_aggro_score: float
-    max_accel: float
-    max_brake: float
-    brake_coeff: float
     max_accel: float
     max_brake: float
     brake_coeff: float
@@ -110,7 +120,7 @@ class Driver(ContinuousSpaceAgent):
 
         # Reaction time computation
         # Calculate TTC and gap between leading vehicle *****need to figure out how to determine leading vehicle
-        self.gap, self.ttc = self.compute_ttc(lead_vehicle) # !! Does not run yet !!#
+        self.gap, _,self.ttc = self.compute_ttc(lead_vehicle) # !! Does not run yet !!#
         self.reaction_time = self.get_reaction_time(self.ttc, self.gap)
 
         # Compute acceleration
@@ -137,6 +147,48 @@ class Driver(ContinuousSpaceAgent):
     def update_state():
         return
 
+     # Call this method each time step ONLY if we need decide to brake
+    # Inputs:
+    # model_time -- in the time stepping function pass model.time here
+    # dt -- length of each time step
+    # ttc - time to collision, helps get reaction time and brake amount
+    def get_brake_amount(self, model_time,dt, ttc, gap):
+
+        brake_amount = 0
+        # If we just registered that we need to brake, we have to create a new braking object.  
+        if self.braking == None:
+
+            # Here model_time will be the initial brake time
+            self.braking = Braking(model_time)
+            # We will not have reacted by this point, so return 0
+            return 0
+
+        # Get current react time and brake amount based on the perceived threat in this time step. 
+        react_time = self.get_reaction_time(ttc)
+        brake_amount = self.compute_acceleration( ttc, gap, react_time)
+
+        # 
+        self.braking.brake_amts.append(brake_amount)
+        self.braking.react_times.append(react_time)
+        self.braking.act_times.append(self.braking.init_time + dt*react_time)
+
+        # Get the min activation time and its index -- this will be used to decide if we have reacted by the time step in order to brake
+        min_act = min(self.braking.act_times)
+
+        # activation time index
+        act_time_i = self.braking.react_times.index(min_act)
+
+        # If we have reached a time to react
+        if model_time >= self.braking.act_times(act_time_i):
+
+            braking_amt = self.braking.brake_amts(act_time_i)
+            self.braking.curr_braking = braking_amt
+
+            self.braking.act_times.pop(act_time_i)
+            self.braking.brake_amts.pop(act_time_i)
+            self.braking.react_times.pop(act_time_i)
+
+        return self.braking.curr_braking
 
     # Forward Euler Integration + Kinematic bicycle model, as found here: https://github.com/winstxnhdw/KinematicBicycleModel/blob/main/README.md
     def move(self, dt):
@@ -164,18 +216,14 @@ class Driver(ContinuousSpaceAgent):
 
     # Added definitions for controlling reaction time - TTC calculation
     def compute_ttc(self, lead_vehicle):
-        gap = (
-        lead_vehicle.pos[0]
-        - self.pos[0]
-        - 0.5*self.length
-        - 0.5*lead_vehicle.length
-    )
+        gap = (lead_vehicle.pos[0] - self.pos[0] - 0.5*self.length - 0.5*lead_vehicle.length)
         closing_speed = self.velo - lead_vehicle.velo
 
         if closing_speed <= 0:
             return gap, np.inf
 
-        return gap, closing_speed
+        ttc = gap / closing_speed
+        return gap, closing_speed, ttc
 
     
     # Assign reaction time to driver based on TTC
