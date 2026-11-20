@@ -233,7 +233,7 @@ class Driver(ContinuousSpaceAgent):
         - self.pos[0]
         - 0.5*self.length
         - 0.5*lead_vehicle.length
-    )
+        )
         closing_speed = self.velo - lead_vehicle.velo
 
         if closing_speed <= 0:
