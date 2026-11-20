@@ -24,12 +24,16 @@ SPEED_LIMIT = mph_to_ms(60)
 class Behavior:
     name: str
     desired_speed: float
+    dist_threshold: float
     reaction_time_max: float
     reaction_time_min: float
     ttc_crit: float
     ttc_sensitivity: float
     tailgating_dist_coeff: float
     pass_aggro_score: float
+    max_accel: float
+    max_brake: float
+    brake_coeff: float
 
 # Average driving reaction time in real-world conditions is about 1-1.5 seconds, with median around 0.6 for pure natural reflexes and 1-1.5 when taking into account perception + decision + motor
 # FUTURE WORK: I bet that reaction time changes based on the threat, like if the person slams on their breaks right in front of you, reaction time decreases from normal conditions. 
@@ -42,7 +46,7 @@ AVERAGE = Behavior(
     reaction_time_min=0.5,
     ttc_crit=4.0,
     ttc_sensitivity=1.0,
-    tailgating_dist_coeff=0.8*3,
+    tailgating_dist_coeff=3,
     pass_aggro_score=50
 )
 
@@ -89,10 +93,15 @@ class Driver(ContinuousSpaceAgent):
         self.length = length
         self.width = width
 
-        
+        # Reaction time computation
+        # Calculate TTC and gap between leading vehicle *****need to figure out how to determine leading vehicle
+        self.gap, self.ttc = self.compute_ttc(lead_vehicle) # !! Does not run yet !!#
+        self.reaction_time = self.get_reaction_time(self.ttc, self.gap)
 
-        self.front_right = self.inv_kinematics(self.length / 2, -self.width/2)
-        self.front_left = self.inv_kinematics(self.length/2, self.width/2)
+        # Compute acceleration
+        self.accel = self.compute_acceleration(self.ttc, self.gap, self.reaction_time)
+
+        # self.inv_kinematics(self.length/2, self.width/2)
         self.back_right = self.inv_kinematics(-self.length/2, -self.width/2)
         self.back_left = self.inv_kinematics(-self.length/2, self.width/2)
 
@@ -149,21 +158,34 @@ class Driver(ContinuousSpaceAgent):
         closing_speed = self.velo - lead_vehicle.velo
 
         if closing_speed <= 0:
-            return np.inf
+            return gap, np.inf
 
-        return gap / closing_speed
+        return gap, closing_speed
 
+    
     # Assign reaction time to driver based on TTC
-    def get_reaction_time(self, ttc):
+    def get_reaction_time(self, ttc, gap):
 
         b = self.behavior
 
         if np.isinf(ttc):
             return b.reaction_time_max
 
-        return (
-            b.reaction_time_min
-            + (b.reaction_time_max - b.reaction_time_min)
-            / (1 + np.exp(-b.ttc_sensitivity *
-                        (ttc - b.ttc_critical)))
-        )
+        if gap < (SPEED_LIMIT*b.tailgating_dist_coeff)/4:
+            return b.reaction_time_min
+
+        reaction_time = (b.reaction_time_min + (b.reaction_time_max - b.reaction_time_min)
+            / (1 + np.exp(-b.ttc_sensitivity * (ttc - b.ttc_critical))))
+        
+        return reaction_time
+
+    # Formula for calculating acceleration/deceleration
+    def compute_acceleration(self, ttc, gap, t_react):
+        b = self.behavior
+        a_free = (1 - self.velo/b.desired_speed) * b.max_accel
+
+        if gap > b.dist_threshold:
+            return a_free
+        
+        a_brake = b.max_brake * (1 / (1 + np.exp(b.brake_coeff * (ttc - t_react))))
+        return (a_free - a_brake)
