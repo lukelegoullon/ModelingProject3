@@ -128,9 +128,8 @@ class Driver(ContinuousSpaceAgent):
         self.pos = self.pos + dt*np.array([self.velo,0])
         self.velo = self.velo + dt*self.accel
 
-    # Find leading vehicle
-    def find_leading_vehicle(self):
-        self.get_nearest_neighbors(1)
+
+        
 
     # check collision with two cars moving in the same direction 
     def check_collision(self, other):
