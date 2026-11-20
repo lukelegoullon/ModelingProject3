@@ -9,11 +9,13 @@ class TrafficModel(Model):
         super().__init__()
 
         # Note I can seed the RNG in continuous space to make the models more reproducible. 
-        self.space = ContinuousSpace(dimension = [width, height],torus = True, n_agents = len(Agents))
+        self.space = ContinuousSpace(dimensions = [width, height],torus = True, n_agents = len(Agents))
         self.n_lanes = num_lanes
         self.type = "Torus"
         self.n_drivers = num_drivers
         self.time_step = t_step
+
+        self.time = 0
 
     
 
