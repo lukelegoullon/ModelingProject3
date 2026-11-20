@@ -9,11 +9,23 @@ def mph_to_ms(mph_speed):
     ms = 0.44704 * mph_speed
     return ms
 
+from dataclasses import dataclass
+import numpy as np
+import math
+
+
+def mph_to_ms(mph_speed):
+    ms = 0.44704 * mph_speed
+    return ms
+
 
 # Change this value -- we may want to go to SI units m/s 
 SPEED_LIMIT = mph_to_ms(60)
 
 # Rule of thumb for a safe_tailgating distance is 3 seconds of distance
+# Update this, shuld change based on speed
+# SAFE_TAILGATE = 3 * SPEED_LIMIT
+
 # Update this, shuld change based on speed
 # SAFE_TAILGATE = 3 * SPEED_LIMIT
 
@@ -31,6 +43,9 @@ class Behavior:
     ttc_sensitivity: float
     tailgating_dist_coeff: float
     pass_aggro_score: float
+    max_accel: float
+    max_brake: float
+    brake_coeff: float
     max_accel: float
     max_brake: float
     brake_coeff: float
@@ -128,10 +143,8 @@ class Driver(ContinuousSpaceAgent):
         self.pos = self.pos + dt*np.array([self.velo,0])
         self.velo = self.velo + dt*self.accel
 
-    # Find leading vehicle
-    def find_leading_vehicle(self):
-        self.get_nearest_neighbors(1)
 
+        
 
     # check collision with two cars moving in the same direction 
     def check_collision(self, other):
