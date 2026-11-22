@@ -9,15 +9,17 @@ LANE_WIDTH = 3.6576  # meters, ~12 ft
 
 class TrafficModel(Model):
     """A traffic model with some number of agents given in the init."""
-    def __init__(self, length=1000, 
+    def __init__(self, 
+                 length=1000, 
                  num_lanes=1,
                  num_drivers=1, 
                  t_step=0.1, 
                  seed=None#,
                  #Agents):
         ):
-        
-        super().__init__(seed=seed)
+        super().__init__()
+
+        # Note I can seed the RNG in continuous space to make the models more reproducible.
         self.n_lanes = num_lanes
         self.n_drivers = num_drivers
         self.time_step = t_step
@@ -84,6 +86,17 @@ class TrafficModel(Model):
     #     drivers = []
     #     for i in range(self.n_drivers):
     #         driver_behavior = random.choice([driver.DANGEROUS, driver.AVERAGE, driver.CAUTIOUS])
+
+        self.time = 0
+
+    
+
+        
+
+    def get_drivers(self):
+        drivers = []
+        for i in range(self.n_drivers):
+            driver_behavior = random.choice([driver.DANGEROUS, driver.AVERAGE, driver.CAUTIOUS])
 
     #         new_driver = driver.Driver(TrafficModel, 40, 1, 1, )
 
