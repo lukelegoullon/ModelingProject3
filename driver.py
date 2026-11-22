@@ -14,36 +14,7 @@ DUMMY_BRAKE = -1
 # Update this, shuld change based on speed
 # SAFE_TAILGATE = 3 * SPEED_LIMIT
 
-# Update this, shuld change based on speed
-# SAFE_TAILGATE = 3 * SPEED_LIMIT
-
 ## Braking class
-class Braking: 
-    def __init__(self, init_time):
-        self.is_braking = False
-
-        self.curr_braking = 0
-        # Once a decision to brake is made, we start tracking braking times and corresponding brake amounts.
-        self.react_times = []
-        self.brake_amts = []
-        self.act_times = []
-
-        # The time where the braking was initialized
-        self.init_time = init_time
-
-class Braking: 
-    def __init__(self, init_time):
-        self.is_braking = False
-
-        self.curr_braking = 0
-        # Once a decision to brake is made, we start tracking braking times and corresponding brake amounts.
-        self.react_times = []
-        self.brake_amts = []
-        self.act_times = []
-
-        # The time where the braking was initialized
-        self.init_time = init_time
-
 class Braking: 
     def __init__(self, init_time):
         self.is_braking = False
