@@ -3,44 +3,37 @@ import solara
 from matplotlib.figure import Figure   # NOT pyplot: pyplot leaks figures in a server
 from mesa.visualization import SolaraViz, make_plot_component, make_space_component
 from mesa.visualization.utils import update_counter
+from mesa.visualization.components import AgentPortrayalStyle
 
 import driver
 import model
 
 def agent_portrayal(agent):
-    return AgentPortrayalStyle(
-        color="tab:blue",
-        size=20,
-    )
-
+    return AgentPortrayalStyle(color="tab:blue", size=20)
+ 
+ 
 model_params = {
-    "seed": {"type": "InputText", "value": 42, "label": "Seed"},
-    "length": {"type": "SliderInt", "value": 1000, "min": 10, "max": 1000, "step": 10, "label": "Num Lanes"},
+    "seed": 42,
+    "length": {"type": "SliderInt", "value": 1000, "min": 100, "max": 5000, "step": 100, "label": "Road length (m)"},
     "num_lanes": {"type": "SliderInt", "value": 1, "min": 1, "max": 5, "step": 1, "label": "Num Lanes"},
-    "nun_drivers": {"type": "SlinderInt", "value": 1, "min": 1, "max":100, "step":1, "label": "Num Drivers"},
-    "t_step": {"type": "SliderInt", "value": 0.1, "min": 1, "max": 5, "step": 1, "label": "Time Step"}#,
-    #Unsure what Agents Param will be/do in TrafficModel
-    #"Agents": {"type": "SliderInt", "value": 50, "min": 10, "max": 200, "step": 10, "label": "Agents"},
+    "num_drivers": {"type": "SliderInt", "value": 1, "min": 1, "max": 100, "step": 1, "label": "Num Drivers"},
+    "t_step": {"type": "SliderFloat", "value": 0.1, "min": 0.01, "max": 1.0, "step": 0.01, "label": "Time Step (s)"},
 }
-
-model = model.TrafficModel(length=1000, num_lanes=1, num_drivers=1, t_step=0.1, seed=None)
-
-# ---------------------------------------------------------------- charts from the DataCollector
+ 
+traffic_model = TrafficModel(length=1000, num_lanes=1, num_drivers=1, t_step=0.1, seed=42)
+ 
 SpaceView = make_space_component(agent_portrayal)
-SpeedPlot = make_plot_component("mean_speed")  # needs a DataCollector reporter in TrafficModel
-
+SpeedPlot = make_plot_component("mean_speed")
+ 
 page = SolaraViz(
-    model,
+    traffic_model,
     components=[SpaceView, SpeedPlot],
     model_params=model_params,
     name="Ring-road with no ramps",
-    play_interval=100,   # ms between steps; lower = faster
+    play_interval=100,
 )
 page  # Solara looks for a top-level `page`
+ 
 if __name__ == "__main__":
-    import subprocess
-    import sys
-
-    # Launch the Solara server on this file; it opens your default browser automatically.
-    # Because solara imports the file as a module, this block doesn't run again (no recursion).
+    import subprocess, sys
     subprocess.run([sys.executable, "-m", "solara", "run", __file__])

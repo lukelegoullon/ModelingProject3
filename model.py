@@ -49,6 +49,7 @@ class TrafficModel(Model):
                 y = (lane+.5)*LANE_WIDTH
         #used_positions for each driver contains an (intial x, inital lane)
 
+        #seed agents onto road using the above random positions
         driver.Driver.create_agents(
             self,
             init_speed = 80.4672, #50 mph = 80.4672 kmh
