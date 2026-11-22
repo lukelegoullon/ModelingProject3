@@ -51,7 +51,7 @@ class Behavior:
 
 AVERAGE = Behavior(
     "AVERAGE",
-    SPEED_LIMIT + 5,
+    SPEED_LIMIT + 5, #DO WE NEED TO FIX THIS FOR SI UNITS?
     dist_threshold=6, #CHANGE
     reaction_time_max=1.2,
     reaction_time_min=0.5,
@@ -100,16 +100,15 @@ DANGEROUS = Behavior(
 class Driver(ContinuousSpaceAgent):
     def __init__(self,model, behavior_type,init_speed, init_lane_num, travel_direction, init_pos, length, width, init_accel = 0):
         super().__init__(model.space, model)
-        self.velo = init_speed * travel_direction
+        self.velo = init_speed #* travel_direction
         self.travel_dir = travel_direction
         self.lane = init_lane_num
         self.accel = init_accel
-        # self.wheelbase = 0.65*self.length
 
         self.behavior = behavior_type
 
         # Center of vehicle in global coordinates
-        self.pos = init_pos
+        self.position = init_pos
 
         # Vechiles are represented by rectangles with length and width. 
         self.length = length
@@ -117,16 +116,19 @@ class Driver(ContinuousSpaceAgent):
 
         # Reaction time computation
         # Calculate TTC and gap between leading vehicle *****need to figure out how to determine leading vehicle
-        self.gap, _,self.ttc = self.compute_ttc(lead_vehicle) # !! Does not run yet !!#
-        self.reaction_time = self.get_reaction_time(self.ttc, self.gap)
+
+# COMMENTED FOR MINIMUM SCOPE TEST
+        # self.gap, _,self.ttc = self.compute_ttc(lead_vehicle) # !! Does not run yet !!#
+        #self.reaction_time = self.get_reaction_time(self.ttc, self.gap)
         self.braking = None
 
         # Compute acceleration
-        self.accel = self.compute_acceleration(self.ttc, self.gap, self.reaction_time)
+        #self.accel = self.compute_acceleration(self.ttc, self.gap, self.reaction_time)
 
+# COMMENTED FOR MINIMUM SCOPE TEST
         # self.inv_kinematics(self.length/2, self.width/2)
-        self.back_right = self.inv_kinematics(-self.length/2, -self.width/2)
-        self.back_left = self.inv_kinematics(-self.length/2, self.width/2)
+        # self.back_right = self.inv_kinematics(-self.length/2, -self.width/2)
+        # self.back_left = self.inv_kinematics(-self.length/2, self.width/2)
 
     @staticmethod
     def mph_to_ms(mph_speed):
@@ -136,17 +138,36 @@ class Driver(ContinuousSpaceAgent):
     # Get from a point in the driver frame to the frame
     def inv_kinematics(self,x_loc, y_loc):
         yaw = self.yaw
-        x,y = self.pos
+        x,y = self.posistion
         rot_mat = np.array([[math.cos(yaw), -math.sin(yaw), x],[math.sin(yaw), math.cos(yaw) ,y], [0,0,1]])
         point = rot_mat @ np.array([x_loc, y_loc, 1])
         return point[:2]
 
-    def set_speed(self, new_speed):
-        self.speed = new_speed
+    
+    # def set_speed(self, new_speed):
+    #     self.speed = new_speed
 
     # Every driver every time step runs this method. It computes acceleration, checks collision, decides to change lanes, etc.
     def update_state():
         return
+
+    #for minimum scope can change later
+    def step(self):
+        dt = self.model.time_step
+ 
+        # No lead vehicle yet (1-car test)
+        gap, _, ttc = self.compute_ttc(None)
+ 
+        t_react = self.get_reaction_time(ttc, gap)
+        self.accel = self.compute_acceleration(ttc, gap, t_react)
+ 
+        # Forward Euler
+        self.velo = max(0.0, self.velo + dt * self.accel)
+        new_pos = self.position + dt * np.array([self.travel_dir * self.velo, 0.0])
+ 
+        # Ring road: wrap around
+        self.position = new_pos % np.array([self.model.length, self.model.width])
+ 
 
      # Call this method each time step ONLY if we need decide to brake
     # Inputs:
@@ -177,23 +198,20 @@ class Driver(ContinuousSpaceAgent):
         min_act = min(self.braking.act_times)
 
         # activation time index
-        act_time_i = self.braking.react_times.index(min_act)
+        i = self.braking.act_times.index(min(self.braking.act_times))
 
-        # If we have reached a time to react
-        if model_time >= self.braking.act_times(act_time_i):
-
-            braking_amt = self.braking.brake_amts(act_time_i)
-            self.braking.curr_braking = braking_amt
-
-            self.braking.act_times.pop(act_time_i)
-            self.braking.brake_amts.pop(act_time_i)
-            self.braking.react_times.pop(act_time_i)
+        #if we have reached a time to react
+        if model_time >= self.braking.act_times[i]:
+            self.braking.curr_braking = self.braking.brake_amts[i]
+            self.braking.act_times.pop(i)
+            self.braking.brake_amts.pop(i)
+            self.braking.react_times.pop(i)
 
         return self.braking.curr_braking
 
     # Forward Euler Integration + Kinematic bicycle model, as found here: https://github.com/winstxnhdw/KinematicBicycleModel/blob/main/README.md
     def move(self, dt):
-        self.pos = self.pos + dt*np.array([self.velo,0])
+        self.position = self.position + dt*np.array([self.velo,0])
         self.velo = self.velo + dt*self.accel
 
 
@@ -244,14 +262,17 @@ class Driver(ContinuousSpaceAgent):
 
     # Added definitions for controlling reaction time - TTC calculation
     def compute_ttc(self, lead_vehicle):
-        gap = (lead_vehicle.pos[0] - self.pos[0] - 0.5*self.length - 0.5*lead_vehicle.length)
+        """Returns (gap, closing_speed, ttc). Pass None if there is no lead."""
+        if lead_vehicle is None:
+            return np.inf, 0.0, np.inf
+ 
+        gap = (lead_vehicle.position[0] - self.position[0]
+               - 0.5 * self.length - 0.5 * lead_vehicle.length)
         closing_speed = self.velo - lead_vehicle.velo
-
+ 
         if closing_speed <= 0:
-            return gap, np.inf
-
-        ttc = gap / closing_speed
-        return gap, closing_speed, ttc
+            return gap, closing_speed, np.inf
+        return gap, closing_speed, gap / closing_speed
 
     
     # Assign reaction time to driver based on TTC
@@ -266,7 +287,7 @@ class Driver(ContinuousSpaceAgent):
             return b.reaction_time_min
 
         reaction_time = (b.reaction_time_min + (b.reaction_time_max - b.reaction_time_min)
-            / (1 + np.exp(-b.ttc_sensitivity * (ttc - b.ttc_critical))))
+            / (1 + np.exp(-b.ttc_sensitivity * (ttc - b.ttc_crit))))
         
         return reaction_time
 
