@@ -28,6 +28,9 @@ class Braking:
         # The time where the braking was initialized
         self.init_time = init_time
 
+        # Starting lane - for now always 1
+        self.init_lane = 1
+
 # Data class is a simplified class meant to hold data -- automatically generates an init()
 # Current parameters to define driving 
 @dataclass
@@ -115,14 +118,14 @@ class Driver(ContinuousSpaceAgent):
         self.length = length
         self.width = width
 
-        # Reaction time computation
-        # Calculate TTC and gap between leading vehicle *****need to figure out how to determine leading vehicle
-        self.gap, _,self.ttc = self.compute_ttc(lead_vehicle) # !! Does not run yet !!#
-        self.reaction_time = self.get_reaction_time(self.ttc, self.gap)
-        self.braking = None
+        # Initialize leading vehicle, TTC, gap, variables
+        self.lead_vehicle = None
+        self.gap = np.inf
+        self.ttc = np.inf
 
-        # Compute acceleration
-        self.accel = self.compute_acceleration(self.ttc, self.gap, self.reaction_time)
+        # Set initial acceleration and braking
+        self.accel = 0 # CHANGE
+        self.braking = None
 
         # self.inv_kinematics(self.length/2, self.width/2)
         self.back_right = self.inv_kinematics(-self.length/2, -self.width/2)
@@ -145,7 +148,16 @@ class Driver(ContinuousSpaceAgent):
         self.speed = new_speed
 
     # Every driver every time step runs this method. It computes acceleration, checks collision, decides to change lanes, etc.
-    def update_state():
+    def update_state(self):
+        # Find leading vehicle
+        self.lead_vehicle = self.find_leading_vehicle()
+
+        # Calculate TTC and gap between leading vehicle 
+        self.gap, _,self.ttc = self.compute_ttc(self.lead_vehicle)
+        self.reaction_time = self.get_reaction_time(self.ttc, self.gap)
+
+        # Compute acceleration given leading vehicle
+        self.accel = self.compute_acceleration(self.ttc, self.gap, self.reaction_time)
         return
 
      # Call this method each time step ONLY if we need decide to brake
@@ -165,7 +177,7 @@ class Driver(ContinuousSpaceAgent):
             return 0
 
         # Get current react time and brake amount based on the perceived threat in this time step. 
-        react_time = self.get_reaction_time(ttc)
+        react_time = self.get_reaction_time(ttc, gap)
         brake_amount = self.compute_acceleration( ttc, gap, react_time)
 
         # 
@@ -242,18 +254,45 @@ class Driver(ContinuousSpaceAgent):
                 colliding_vehicles.append(driver)
         return colliding_vehicles
 
+    # Finding a lead vehicle
+    def find_leading_vehicle(self):
+        lead_vehicle = None
+        min_gap = np.inf
+
+        for other in self.model.agents:
+            if other is self:
+                continue
+            if other.lane != self.lane:
+                continue
+
+            dx = (other.pos[0] - self.pos[0]) % self.model.length
+
+            if 0 < dx < min_gap:
+                min_gap = dx
+                lead_vehicle = other
+        
+        return lead_vehicle
+    
     # Added definitions for controlling reaction time - TTC calculation
     def compute_ttc(self, lead_vehicle):
-        gap = (lead_vehicle.pos[0] - self.pos[0] - 0.5*self.length - 0.5*lead_vehicle.length)
+        if lead_vehicle is None:
+            return np.inf, 0, np.inf
+
+        # Compute gap between vehicles on torus
+        gap = ((lead_vehicle.pos[0] - self.pos[0]) % self.model.length)
+
+        # Compute bumper-bumper distance after considering torus shape
+        gap -= (0.5*self.length + 0.5*lead_vehicle.length)
+        
         closing_speed = self.velo - lead_vehicle.velo
 
         if closing_speed <= 0:
-            return gap, np.inf
+            return gap, closing_speed, np.inf
 
         ttc = gap / closing_speed
         return gap, closing_speed, ttc
 
-    
+        
     # Assign reaction time to driver based on TTC
     def get_reaction_time(self, ttc, gap):
 
@@ -279,8 +318,8 @@ class Driver(ContinuousSpaceAgent):
             return a_free
         
         a_brake = b.max_brake * (1 / (1 + np.exp(b.brake_coeff * (ttc - t_react))))
+        
         return (a_free - a_brake)
-
 
 if __name__ == "__main__":
     print('hi')
