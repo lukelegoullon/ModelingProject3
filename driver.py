@@ -131,21 +131,29 @@ class Driver(ContinuousSpaceAgent):
 
 # COMMENTED FOR MINIMUM SCOPE TEST
         # self.inv_kinematics(self.length/2, self.width/2)
-        # self.back_right = self.inv_kinematics(-self.length/2, -self.width/2)
-        # self.back_left = self.inv_kinematics(-self.length/2, self.width/2)
+        self.update_bumpers()
+        self.back_left = self.pos + self.travel_dir
 
     @staticmethod
     def mph_to_ms(mph_speed):
         ms = 0.44704 * mph_speed
         return ms
 
+    def update_bumpers(self):
+
+        self.front_right = self.pos + [self.travel_dir*self.length / 2, self.width/2]
+        self.front_left = self.pos + [self.travel_dir*self.length/2, -self.width/2]
+
+        self.back_right = self.pos + [-self.travel_dir*self.length/2, self.width/2]
+        self.back_left = self.pos + [-self.travel_dir*self.length/2, -self.width/2]
+
     # Get from a point in the driver frame to the frame
-    def inv_kinematics(self,x_loc, y_loc):
-        yaw = self.yaw
-        x,y = self.posistion
-        rot_mat = np.array([[math.cos(yaw), -math.sin(yaw), x],[math.sin(yaw), math.cos(yaw) ,y], [0,0,1]])
-        point = rot_mat @ np.array([x_loc, y_loc, 1])
-        return point[:2]
+    # def inv_kinematics(self,x_loc, y_loc):
+    #     yaw = self.yaw
+    #     x,y = self.posistion
+    #     rot_mat = np.array([[math.cos(yaw), -math.sin(yaw), x],[math.sin(yaw), math.cos(yaw) ,y], [0,0,1]])
+    #     point = rot_mat @ np.array([x_loc, y_loc, 1])
+    #     return point[:2]
 
     
     # def set_speed(self, new_speed):
@@ -231,36 +239,50 @@ class Driver(ContinuousSpaceAgent):
         
     # https://www.geeksforgeeks.org/dsa/find-two-rectangles-overlap/
     # Assume the two cars are travelling the same direction.
+    # AI generated function here -- to handle torus
     def check_collision(self, other):
+        L = self.model.space.width  # Or your stored road length
 
-        if self.travel_dir > 0:
-            x1_min = self.back_right[0]
-            x1_max = self.front_right[0]
+        dx = other.pos[0] - self.pos[0]
+        dx = (dx + L/2) % L - L/2
 
-            x2_min = other.back_right[0]
-            x2_max = other.front_right[0]
+        dy = other.pos[1] - self.pos[1]
 
-        else: 
-            x1_min = self.front_right[0]
-            x1_max = self.back_right[0]
+        x_overlap = abs(dx) <= (self.length + other.length) / 2
+        y_overlap = abs(dy) <= (self.width + other.width) / 2
 
-            x2_min = other.front_right[0]
-            x2_max = other.back_right[0]
+        return x_overlap and y_overlap
+    # def check_collision(self, other):
 
-        if x1_min > x2_max or x2_min > x1_max:
-            return False
+    #     if self.pos[0] < other.pos[0]:
+    #     if self.travel_dir > 0:
+    #         x1_min = self.back_right[0]
+    #         x1_max = self.front_right[0]
 
-        y1_min = min(self.front_right[1], self.front_left[1])
-        y2_min = min(other.front_right[1], other.front_left[1])
+    #         x2_min = other.back_right[0]
+    #         x2_max = other.front_right[0]
 
-        y1_max = max(self.front_right[1], self.front_left[1])
-        y2_max = max(other.front_right[1], other.front_left[1])
+    #     else: 
+    #         x1_min = self.front_right[0]
+    #         x1_max = self.back_right[0]
+
+    #         x2_min = other.front_right[0]
+    #         x2_max = other.back_right[0]
+
+    #     if x1_min > x2_max or x2_min > x1_max:
+    #         return False
+
+    #     y1_min = min(self.front_right[1], self.front_left[1])
+    #     y2_min = min(other.front_right[1], other.front_left[1])
+
+    #     y1_max = max(self.front_right[1], self.front_left[1])
+    #     y2_max = max(other.front_right[1], other.front_left[1])
         
 
-        if y1_min > y2_max or y2_min > y1_max:
-            return False
+    #     if y1_min > y2_max or y2_min > y1_max:
+    #         return False
 
-        return True
+    #     return True
         
 
     def colliding(self):
