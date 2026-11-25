@@ -3,7 +3,9 @@ from mesa.experimental.continuous_space import(ContinuousSpace, ContinuousSpaceA
 import random
 import driver
 import numpy as np
+import math
 from mesa.datacollection import DataCollector
+from collections import deque
 
 LANE_WIDTH = 3.6576  # meters, ~12 ft
 
@@ -38,29 +40,24 @@ class TrafficModel(Model):
             n_agents = num_drivers
         )
 
-        #create np.column array of (x,y) positions for each driver
-            #need to ensure drivers are not placed on top of eachother
+        car_len, car_w, min_gap = 4.5, 1.8, 2.0
+        per_lane = math.ceil(num_drivers / num_lanes)
+        spacing = length / per_lane
+        min_spacing = car_len + min_gap
+        if spacing < min_spacing:
+            raise ValueError(f"Too many drivers: {per_lane}/lane needs >= {per_lane*min_spacing:.0f} m of road")
 
-        # NEED TO FIX, NEVER APPENDS. COMMENTED FOR MINIMUM SCOPE
-        # used_positions = [] #list to hold positions currently occupied
-        # while len(used_positions) != self.n_drivers:
-        #     x = self.rng.uniform(0, self.length)
-        #     # NEED TO ACCOUNT FOR SIZE OF CARS IN POSITION SEEDING
-        #     while x in used_positions: #generate a unique x position on the road
-        #         x = self.rng.uniform(0, self.length)
-        #     #choose y to be center of lane 0 or higher
-        #     lane = self.rng.integers(0, self.n_lanes)
-        #     y = (lane+.5)*LANE_WIDTH
-        #     while y in used_positions: #generate a unique x position on the road
-        #         lane = self.rng.integers(0, self.n_lanes)
-        #         y = (lane+.5)*LANE_WIDTH
-        # #used_positions for each driver contains an (intial x, inital lane)
-
-        pos = np.array([0.0, 0.5 * LANE_WIDTH])
-        driver.Driver(self, behavior_type=driver.AVERAGE,
-              init_speed=20.0,
-              init_lane_num=0, travel_direction=1,
-              init_pos=pos, length=4.5, width=1.8)
+        behaviors = [driver.DANGEROUS, driver.AVERAGE, driver.CAUTIOUS]
+        for i in range(num_drivers):
+            lane, slot = i % num_lanes, i // num_lanes
+            jitter = self.rng.uniform(-1, 1) * (spacing - min_spacing) / 4
+            x = (slot * spacing + jitter) % length
+            y = (lane + 0.5) * LANE_WIDTH
+            b = self.random.choice(behaviors)
+            driver.Driver(self, behavior_type=b,
+                        init_speed=min(20.0, b.desired_speed),
+                        init_lane_num=lane, travel_direction=1,
+                        init_pos=np.array([x, y]), length=car_len, width=car_w)
 
         #seed agents onto road using the above random positions
         # driver.Driver.create_agents(
@@ -87,30 +84,22 @@ class TrafficModel(Model):
                 "speed": "velo",
             },
         )
+        self.history = deque(maxlen=1500)   # (time, x positions, speeds)
+        self._record_history()
         self.datacollector.collect(self) #collect data after init for initial positions
 
-    # def step(self):
-    #     self.agents.do("calculate_updated_positions")
-    #     self.agents.do("update_positions")
-    #     self.datacollector.collect(self)
+    def _record_history(self):
+        xs = np.array([a.position[0] for a in self.agents])
+        vs = np.array([a.velo for a in self.agents])
+        self.history.append((self.sim_time, xs, vs))
+
     #MINIMUM SCOPE TEST
     def step(self):
-        self.agents.do("step")
+        self.agents.do("update_state")   # phase 1: everyone perceives + computes accel
+        self.agents.do("move")           # phase 2: everyone integrates
         self.sim_time += self.time_step
+        self._record_history()
         self.datacollector.collect(self)
         
-    # def get_drivers(self):
-    #     drivers = []
-    #     for i in range(self.n_drivers):
-    #         driver_behavior = random.choice([driver.DANGEROUS, driver.AVERAGE, driver.CAUTIOUS])
-        
-
-    # def get_drivers(self):
-    #     drivers = []
-    #     for i in range(self.n_drivers):
-    #         driver_behavior = random.choice([driver.DANGEROUS, driver.AVERAGE, driver.CAUTIOUS])
-
-    #         new_driver = driver.Driver(TrafficModel, 40, 1, 1, )
-
     # Continuous spaces give us a lot of functions for free -- calculate distances, add, remove agents, difference vector, get agents in radius, etc. Look at documention:
     # https://mesa.readthedocs.io/stable/_modules/experimental/continuous_space/continuous_space.html

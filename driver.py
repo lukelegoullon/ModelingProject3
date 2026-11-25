@@ -97,7 +97,11 @@ DANGEROUS = Behavior(
     brake_coeff=2 #CHANGE
 )
 
-
+# Trying to prevent cars phasing by giving each driver a desired headway time rather than distance
+@property
+def desired_headway(self):
+    # AVERAGE 1.5 s, CAUTIOUS 2.25 s, DANGEROUS 0.6 s
+    return self.behavior.tailgating_dist_coeff / 3 * 1.5
 
 # Do the modulus to update the taurus after all collision, ttc checks and everything
 class Driver(ContinuousSpaceAgent):
@@ -109,6 +113,7 @@ class Driver(ContinuousSpaceAgent):
         self.accel = init_accel
 
         self.behavior = behavior_type
+        self.reaction_time = behavior_type.reaction_time_max
 
         # Center of vehicle in global coordinates
         self.position = init_pos
@@ -130,9 +135,7 @@ class Driver(ContinuousSpaceAgent):
         self.accel = self.compute_acceleration(self.ttc, self.gap, self.reaction_time)
 
 # COMMENTED FOR MINIMUM SCOPE TEST
-        # self.inv_kinematics(self.length/2, self.width/2)
         self.update_bumpers()
-        self.back_left = self.pos + self.travel_dir
 
     @staticmethod
     def mph_to_ms(mph_speed):
@@ -171,25 +174,7 @@ class Driver(ContinuousSpaceAgent):
         # Compute acceleration given leading vehicle
         self.accel = self.compute_acceleration(self.ttc, self.gap, self.reaction_time)
         return
-
-    #for minimum scope can change later
-    def step(self):
-        dt = self.model.time_step
  
-        # No lead vehicle yet (1-car test)
-        gap, _, ttc = self.compute_ttc(None)
- 
-        t_react = self.get_reaction_time(ttc, gap)
-        self.accel = self.compute_acceleration(ttc, gap, t_react)
- 
-        # Forward Euler
-        self.velo = max(0.0, self.velo + dt * self.accel)
-        new_pos = self.position + dt * np.array([self.travel_dir * self.velo, 0.0])
- 
-        # Ring road: wrap around
-        self.position = new_pos % np.array([self.model.length, self.model.width])
- 
-
      # Call this method each time step ONLY if we need decide to brake
     # Inputs:
     # model_time -- in the time stepping function pass model.time here
@@ -230,10 +215,13 @@ class Driver(ContinuousSpaceAgent):
 
         return self.braking.curr_braking
 
+
     # Forward Euler Integration + Kinematic bicycle model, as found here: https://github.com/winstxnhdw/KinematicBicycleModel/blob/main/README.md
-    def move(self, dt):
-        self.position = self.position + dt*np.array([self.velo,0])
-        self.velo = self.velo + dt*self.accel
+    def move(self):
+        dt = self.model.time_step
+        self.velo = max(0.0, self.velo + dt * self.accel)
+        x = (self.position[0] + dt * self.travel_dir * self.velo) % self.model.length
+        self.position = np.array([x, self.position[1]])
 
 
         
@@ -314,25 +302,28 @@ class Driver(ContinuousSpaceAgent):
         
         return lead_vehicle
     
+    def bumper_gap(self, lead):
+        """Bumper-to-bumper distance on the ring. Negative means overlapping. Moved some logic from compute_ttc here."""
+        gap = (lead.position[0] - self.position[0]) % self.model.length
+        return gap - 0.5 * (self.length + lead.length)
+    
     # Added definitions for controlling reaction time - TTC calculation
     def compute_ttc(self, lead_vehicle):
         if lead_vehicle is None:
-            return np.inf, 0, np.inf
+            return np.inf, 0.0, np.inf
 
-        # Gap between vehicles on the torus
-        gap = (lead_vehicle.pos[0] - self.pos[0]) % self.model.length
-
-        # Bumper-to-bumper distance
-        gap -= 0.5 * (self.length + lead_vehicle.length)
-
+        #to avoid negative values added a helper function and this clamp
+        gap = max(self.bumper_gap(lead_vehicle), 0.0)
         closing_speed = self.velo - lead_vehicle.velo
 
         if closing_speed <= 0:
             return gap, closing_speed, np.inf
+        
         return gap, closing_speed, gap / closing_speed
 
         
     # Assign reaction time to driver based on TTC
+        # LIKELY NEED TO UPDATE THIS
     def get_reaction_time(self, ttc, gap):
 
         b = self.behavior
@@ -342,23 +333,47 @@ class Driver(ContinuousSpaceAgent):
 
         if gap < (SPEED_LIMIT*b.tailgating_dist_coeff)/4:
             return b.reaction_time_min
-
+        
         reaction_time = (b.reaction_time_min + (b.reaction_time_max - b.reaction_time_min)
             / (1 + np.exp(-b.ttc_sensitivity * (ttc - b.ttc_crit))))
         
         return reaction_time
 
     # Formula for calculating acceleration/deceleration
+    # def compute_acceleration(self, ttc, gap, t_react):
+    #     b = self.behavior
+    #     a_free = (1 - self.velo/b.desired_speed) * b.max_accel
+
+    #     if gap > b.dist_threshold:
+    #         return a_free
+        
+    #     a_brake = b.max_brake * (1 / (1 + np.exp(b.brake_coeff * (ttc - t_react))))
+        
+    #     return (a_free - a_brake)
+
     def compute_acceleration(self, ttc, gap, t_react):
         b = self.behavior
-        a_free = (1 - self.velo/b.desired_speed) * b.max_accel
+        v = self.velo
 
-        if gap > b.dist_threshold:
+        # Desired time headway, derived from your tailgating coefficient
+        # (AVERAGE 1.5 s, CAUTIOUS 2.25 s, DANGEROUS 0.6 s)
+        T = b.tailgating_dist_coeff / 3 * 1.5
+
+        # Free-road term
+        a_free = b.max_accel * (1 - (v / b.desired_speed) ** 4)
+
+        if self.lead_vehicle is None or np.isinf(gap):
             return a_free
-        
-        a_brake = b.max_brake * (1 / (1 + np.exp(b.brake_coeff * (ttc - t_react))))
-        
-        return (a_free - a_brake)
+
+        gap = max(gap, 0.1)  # avoid divide-by-zero on overlap
+        dv = v - self.lead_vehicle.velo  # closing speed
+
+        s_star = (b.dist_threshold + v * T
+                + v * dv / (2 * np.sqrt(b.max_accel * b.brake_coeff)))
+        s_star = max(s_star, b.dist_threshold)
+
+        a = b.max_accel * (1 - (v / b.desired_speed) ** 4 - (s_star / gap) ** 2)
+        return max(a, -b.max_brake * 2)  # allow emergency braking beyond comfortable
 
 if __name__ == "__main__":
     print('hi')
